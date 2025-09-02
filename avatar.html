@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trucker Mouth Animation with Slider</title>
+    <style>
+        html, body {
+            margin: 0;
+            background: transparent !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #truckerImage {
+            max-width: 80%;
+            max-height: 80%;
+        }
+        #audioBarContainer {
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border: 1px solid #666;
+            margin-top: 10px;
+        }
+        #audioBar {
+            height: 100%;
+            background: green;
+            width: 0;
+            transition: width 0.1s, background-color 0.1s;
+        }
+        #sensitivitySlider {
+            width: 200px;
+            margin-top: 10px;
+        }
+        #sensitivityLabel {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            margin-top: 5px;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+    <img id="truckerImage" src="truckerc.png" alt="Trucker Animation">
+    <div id="audioBarContainer">
+        <div id="audioBar"></div>
+    </div>
+    <input type="range" id="sensitivitySlider" min="0.5" max="3" step="0.1" value="1.5">
+    <div id="sensitivityLabel">Sensitivity: 1.5x</div>
+    <script>
+        const truckerImage = document.getElementById('truckerImage');
+        const audioBar = document.getElementById('audioBar');
+        const sensitivitySlider = document.getElementById('sensitivitySlider');
+        const sensitivityLabel = document.getElementById('sensitivityLabel');
+        const images = {
+            closed: 'truckerc.png',
+            halfOpen: 'truckerh.png',
+            open: 'truckero.png'
+        };
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+
+        sensitivitySlider.addEventListener('input', () => {
+            sensitivityLabel.textContent = `Sensitivity: ${sensitivitySlider.value}x`;
+        });
+
+        async function setupAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('Microphone access granted');
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                updateMouthAndBar();
+            } catch (err) {
+                console.error('Microphone error:', err);
+                audioBar.style.background = 'red';
+                audioBar.style.width = '100%';
+            }
+        }
+
+        function updateMouthAndBar() {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            console.log('Audio level:', average);
+
+            const barWidth = Math.min(average * 2, 100);
+            audioBar.style.width = `${barWidth}%`;
+            audioBar.style.background = average > 60 ? 'red' : average > 30 ? 'yellow' : 'green';
+
+            const sensitivity = parseFloat(sensitivitySlider.value);
+            const closedThreshold = 10 * sensitivity;  // Base 10, scaled
+            const halfOpenThreshold = 30 * sensitivity; // Base 30
+            const openThreshold = 50 * sensitivity;    // Base 50
+
+            if (average > openThreshold) {
+                truckerImage.src = images.open;
+            } else if (average > halfOpenThreshold) {
+                truckerImage.src = images.halfOpen;
+            } else {
+                truckerImage.src = images.closed;
+            }
+
+            requestAnimationFrame(updateMouthAndBar);
+        }
+
+        function testImageLoad() {
+            Object.values(images).forEach(src => {
+                const img = new Image();
+                img.src = src;
+                img.onload = () => console.log(`Image loaded: ${src}`);
+                img.onerror = () => console.error(`Failed to load image: ${src}`);
+            });
+        }
+
+        testImageLoad();
+        setupAudio();
+    </script>
+</body>
+</html>
